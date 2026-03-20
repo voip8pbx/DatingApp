@@ -1,97 +1,284 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Dating2401 - A Modern Dating App
 
-# Getting Started
+A feature-rich dating application built with React Native, Supabase, and modern mobile development technologies.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## ✨ Features
 
-## Step 1: Start Metro
+- **User Authentication**: Secure sign-up/login with email/password and Google Sign-In
+- **Profile Management**: Detailed user profiles with photo upload and bio
+- **Swipe-Based Matching**: Intuitive swipe interface for discovering potential matches
+- **Real-time Chat**: Instant messaging between matched users
+- **Location-Based Discovery**: Find matches near you with map integration
+- **Advanced Filtering**: Filter matches by age, distance, and preferences
+- **Push Notifications**: Get notified about new matches and messages
+- **Dark/Light Mode**: Adaptive UI with theme support
+- **Offline Support**: Limited functionality available offline
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## 🛠️ Tech Stack
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+### Frontend
+- **React Native** - Cross-platform mobile framework
+- **React Navigation** - Smooth screen transitions and navigation
+- **NativeWind** - Tailwind CSS for React Native styling
+- **Zustand** - State management solution
+- **React Native Maps** - Interactive map components
+- **React Native Gesture Handler** - Advanced touch handling
+- **React Native Reanimated** - Smooth animations and gestures
+- **React Native SVG** - Vector graphics support
+- **React Native Vector Icons** - Extensive icon library
 
-```sh
-# Using npm
-npm start
+### Backend & Infrastructure
+- **Supabase** - Open-source Firebase alternative
+  - Authentication (Auth)
+  - Real-time Database
+  - Storage (for user photos)
+  - Edge Functions
+- **PostgreSQL** - Relational database (via Supabase)
 
-# OR using Yarn
-yarn start
+### Development Tools
+- **TypeScript** - Type-safe JavaScript
+- **ESLint** - Code linting
+- **Prettier** - Code formatting
+- **Jest** - Testing framework
+- **React Native CLI** - Project scaffolding
+
+## 📱 Screenshots
+
+| Splash Screen | Login Screen | Signup Screen |
+|---------------|--------------|---------------|
+| ![Splash](screenshots/splash.png) | ![Login](screenshots/login.png) | ![Signup](screenshots/signup.png) |
+
+| Profile Screen | Matches Screen | Chat Screen |
+|----------------|----------------|-------------|
+| ![Profile](screenshots/profile.png) | ![Matches](screenshots/matches.png) | ![Chat](screenshots/chat.png) |
+
+| Map Screen | Swipe Screen | Edit Profile |
+|------------|--------------|--------------|
+| ![Map](screenshots/map.png) | ![Swipe](screenshots/swipe.png) | ![Edit Profile](screenshots/edit-profile.png) |
+
+*Note: Add actual screenshots to the `screenshots/` directory*
+
+## 🚀 Installation & Setup
+
+### Prerequisites
+- Node.js (>= 22.11.0)
+- Yarn or npm
+- Watchman (for macOS/Linux)
+- Xcode (for iOS development)
+- Android Studio (for Android development)
+- Supabase account
+
+### Step-by-Step Guide
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/dating2401.git
+   cd dating2401
+   ```
+
+2. **Install dependencies**
+   ```bash
+   # Using npm
+   npm install
+   
+   # Or using Yarn
+   yarn install
+   ```
+
+3. **Set up Supabase**
+   - Create a new project at [supabase.com](https://supabase.com)
+   - Copy your Supabase URL and anon key
+   - Create a `.env` file in the root directory:
+     ```env
+     EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+     EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+     ```
+
+4. **Set up Firebase for Google Sign-In (Optional)**
+   - Create a Firebase project
+   - Enable Google Sign-In authentication
+   - Download `GoogleService-Info.plist` (iOS) and `google-services.json` (Android)
+   - Place them in the appropriate directories:
+     - iOS: `ios/dating2401/GoogleService-Info.plist`
+     - Android: `android/app/google-services.json`
+
+5. **Install iOS dependencies**
+   ```bash
+   cd ios
+   pod install
+   cd ..
+   ```
+
+6. **Run the application**
+   ```bash
+   # Start Metro bundler
+   npm start
+   
+   # In a new terminal, run:
+   # For Android
+   npm run android
+   
+   # For iOS
+   npm run ios
+   ```
+
+## 🔧 Configuration
+
+### Environment Variables
+Create a `.env` file in the root directory with the following variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL | `https://xyzcompany.supabase.co` |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | `public-anon-key` |
+| `EXPO_PUBLIC_GOOGLE_SIGN_IN_WEB_CLIENT_ID` | Google Web Client ID (for Sign-In) | `123456-abcdef.apps.googleusercontent.com` |
+| `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` | Mapbox token (if using Mapbox) | `pk.eyJ1Ijoib...` |
+
+### Android Configuration
+- Update `android/app/build.gradle` with your application ID
+- Configure `google-services.json` for Firebase features
+- Update `android/app/src/main/AndroidManifest.xml` for permissions
+
+### iOS Configuration
+- Update `Info.plist` with required permissions:
+  - Location usage descriptions
+  - Camera and photo library access
+  - Internet access
+- Configure `GoogleService-Info.plist` for Firebase
+
+## 📖 API Documentation
+
+### Supabase Schema
+The application uses the following Supabase tables:
+
+#### profiles
+```sql
+create table profiles (
+  id uuid references auth.users on delete cascade primary key,
+  full_name text,
+  avatar_url text,
+  bio text,
+  birth_date date,
+  gender text,
+  looking_for text[],
+  interests text[],
+  distance_preference integer,
+  age_min integer,
+  age_max integer,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
 ```
 
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+#### matches
+```sql
+create table matches (
+  id uuid primary key default uuid_generate_v4(),
+  user1_id uuid references auth.users,
+  user2_id uuid references auth.users,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  constraint valid_pair check (user1_id < user2_id)
+);
 ```
 
-### iOS
-
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+#### messages
+```sql
+create table messages (
+  id uuid primary key default uuid_generate_v4(),
+  match_id uuid references matches on delete cascade,
+  sender_id uuid references auth.users,
+  content text,
+  is_read boolean default false,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
 ```
 
-Then, and every time you update your native dependencies, run:
+### Authentication Flow
+1. User signs up/in via email/password or Google
+2. Supabase returns JWT token stored in secure storage
+3. Token is used for all subsequent API requests
+4. Real-time subscriptions listen for auth state changes
 
-```sh
-bundle exec pod install
+## 🧪 Testing
+
+### Running Tests
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm test -- --watch
+
+# Run specific test file
+npm test -- src/screens/__tests__/LoginScreen.test.tsx
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+### Test Structure
+- Unit tests: `__tests__` directories alongside components
+- Integration tests: Testing user flows
+- E2E tests: Using Detox (configuration pending)
 
-```sh
-# Using npm
-npm run ios
+## 📁 Project Structure
 
-# OR using Yarn
-yarn ios
+```
+dating2401/
+├── android/                 # Android native code
+├── ios/                     # iOS native code
+├── src/                     # Source code
+│   ├── components/          # Reusable components
+│   │   ├── map/             # Map-related components
+│   │   └── ui/              # Shared UI components
+│   ├── constants/           # Application constants
+│   ├── hooks/               # Custom React hooks
+│   ├── navigation/          # Navigation configuration
+│   ├── screens/             # Application screens
+│   ├── store/               # Zustand stores
+│   ├── theme/               # Theme configuration
+│   ├── types/               # TypeScript type definitions
+│   └── utils/               # Utility functions
+├── supabase/                # Supabase migrations and functions
+├── types/                   # Additional type definitions
+└── ...                      # Configuration files
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+## 🤝 Contributing
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+We welcome contributions to Dating2401! Please follow these guidelines:
 
-## Step 3: Modify your app
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
 
-Now that you have successfully run the app, let's make changes!
+### Development Guidelines
+- Follow the existing code style
+- Write meaningful commit messages
+- Add tests for new features
+- Update documentation as needed
+- Ensure linting passes: `npm run lint`
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+### Reporting Issues
+Please use the [issue tracker](https://github.com/yourusername/dating2401/issues) to report bugs or request features.
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+## 📄 License
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Congratulations! :tada:
+## 👏 Acknowledgments
 
-You've successfully run and modified your React Native App. :partying_face:
+- [React Native Community](https://reactnative.dev/) for the excellent framework
+- [Supabase](https://supabase.com) for the open-source backend
+- [NativeWind](https://www.nativewind.dev/) for Tailwind CSS integration
+- All contributors and open-source libraries used in this project
 
-### Now what?
+## 📞 Contact
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+For questions or support, please contact:
+- Email: support@dating2401.com
+- Website: https://dating2401.com
+- Twitter: [@dating2401](https://twitter.com/dating2401)
 
-# Troubleshooting
+---
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+Made with ❤️ for meaningful connections
