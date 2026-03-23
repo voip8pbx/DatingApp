@@ -74,6 +74,23 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+// ── Load .env from project root ──────────────────────────────────────────────
+def envFile = rootProject.file("../../.env")
+def envVars = [:]
+if (envFile.exists()) {
+    envFile.eachLine { line ->
+        def trimmed = line.trim()
+        if (trimmed && !trimmed.startsWith("#")) {
+            def parts = trimmed.split("=", 2)
+            if (parts.length == 2) {
+                envVars[parts[0].trim()] = parts[1].trim()
+            }
+        }
+    }
+}
+def googleMapsApiKey = envVars["GOOGLE_MAPS_API_KEY"] ?: ""
+// ─────────────────────────────────────────────────────────────────────────────
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -86,6 +103,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        // Inject the Maps API key as a manifest placeholder from .env
+        manifestPlaceholders = [GOOGLE_MAPS_API_KEY: googleMapsApiKey]
     }
     signingConfigs {
         debug {
