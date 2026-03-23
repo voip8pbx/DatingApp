@@ -12,8 +12,8 @@ const supabaseConfig = {
 };
 
 // For development, use mock data instead of real Supabase
-// Set to false to use real Supabase backend
-export const DEV_MODE = true;
+// Set to false or use __DEV__ to use real/mock Supabase backend
+export const DEV_MODE = __DEV__;
 
 export const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey, {
     auth: {
