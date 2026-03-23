@@ -5,16 +5,15 @@ import {
     Image,
     StyleSheet,
     TouchableOpacity,
-    Dimensions,
     Alert,
     Platform,
     PermissionsAndroid,
 } from 'react-native';
-import { Map, MapMarker, MapUserLocation, MapCamera } from '../components/ui/map';
-import AvatarMarker from '../components/map/AvatarMarker';
+import MapView, { Marker, PROVIDER_GOOGLE, MapType, Region } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme, useIsDark } from '../hooks/useTheme';
+
 
 // Interface for Mock User
 export interface MapMockUser {
@@ -85,17 +84,22 @@ const MOCK_USERS: MapMockUser[] = [
 ];
 
 // Focus on North/Central India (Center: Near Delhi)
-const DELHI_CENTER: [number, number] = [77.2090, 28.6139]; // [lon, lat]
-const DEFAULT_ZOOM = 7; // Zoomed in more for Delhi concentration
+const DELHI_REGION = {
+    latitude: 28.6139,
+    longitude: 77.2090,
+    latitudeDelta: 5.0,
+    longitudeDelta: 5.0,
+};
 
 const MapScreen: React.FC = () => {
     const theme = useTheme();
     const isDark = useIsDark();
-    const mapRef = useRef<any>(null);
-    const cameraRef = useRef<any>(null);
-    const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+    const mapRef = useRef<MapView>(null);
+    const [userLocation, setUserLocation] = useState<{ latitude: number, longitude: number } | null>(null);
     const [hasPermission, setHasPermission] = useState<boolean>(false);
     const [selectedUser, setSelectedUser] = useState<MapMockUser | null>(null);
+    const [mapType, setMapType] = useState<MapType>('standard');
+    const [isSatelliteManual, setIsSatelliteManual] = useState<boolean>(false);
 
     useEffect(() => {
         checkPermissionAndInitialize();
@@ -141,14 +145,15 @@ const MapScreen: React.FC = () => {
         Geolocation.getCurrentPosition(
             (position) => {
                 const { latitude, longitude } = position.coords;
-                setUserLocation([longitude, latitude]);
+                setUserLocation({ latitude, longitude });
                 
                 // Zoom to user on load
-                cameraRef.current?.flyTo({
-                    center: [longitude, latitude],
-                    zoom: 12,
-                    duration: 1000,
-                });
+                mapRef.current?.animateToRegion({
+                    latitude,
+                    longitude,
+                    latitudeDelta: 0.1,
+                    longitudeDelta: 0.1,
+                }, 1000);
             },
             (error) => {
                 console.warn('Location error:', error.message);
@@ -157,6 +162,29 @@ const MapScreen: React.FC = () => {
             },
             { enableHighAccuracy: false, timeout: 30000, maximumAge: 10000 }
         );
+    };
+
+    // Auto-switch to satellite/hybrid when user zooms in close enough
+    const handleRegionChangeComplete = (region: Region) => {
+        if (!isSatelliteManual) {
+            if (region.latitudeDelta < 0.05) {
+                setMapType('hybrid');
+            } else {
+                setMapType('standard');
+            }
+        }
+    };
+
+    const toggleSatellite = () => {
+        setIsSatelliteManual(prev => {
+            const nextManual = !prev;
+            if (nextManual) {
+                setMapType('hybrid');
+            } else {
+                setMapType('standard');
+            }
+            return nextManual;
+        });
     };
 
     const getStatusColor = (type: MapMockUser['type']) => {
@@ -170,39 +198,45 @@ const MapScreen: React.FC = () => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <Map
+            <MapView
+                provider={PROVIDER_GOOGLE}
                 ref={mapRef}
                 style={styles.map}
+                initialRegion={DELHI_REGION}
+                showsUserLocation={hasPermission}
+                showsMyLocationButton={false}
+                mapType={mapType}
+                customMapStyle={mapType === 'standard' && isDark ? darkMapStyle : []}
+                onRegionChangeComplete={handleRegionChangeComplete}
             >
-                <MapCamera
-                    ref={cameraRef}
-                    initialViewState={{
-                        center: DELHI_CENTER,
-                        zoom: DEFAULT_ZOOM,
-                    }}
-                />
-                
-                {hasPermission && (
-                    <MapUserLocation />
-                )}
-                
                 {/* Mock User Markers */}
                 {MOCK_USERS.map((user) => (
-                    <MapMarker
+                    <Marker
                         key={user.id}
-                        id={user.id}
-                        lngLat={[user.longitude, user.latitude]}
-                        onPress={() => setSelectedUser(user)}
+                        identifier={user.id}
+                        coordinate={{ latitude: user.latitude, longitude: user.longitude }}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            setSelectedUser(user);
+                        }}
+                        tracksViewChanges={false}
                     >
-                        <AvatarMarker 
-                            avatarUrl={user.avatarUrl}
-                            name={user.name}
-                            isOnline={user.type === 'online'}
-                            size={40}
-                        />
-                    </MapMarker>
+                        <View style={[
+                            styles.markerWrapper,
+                            { borderColor: user.type === 'online' ? '#FF6B6B' : user.type === 'away' ? '#FFC107' : user.type === 'busy' ? '#F44336' : '#9E9E9E' }
+                        ]}>
+                            <Image
+                                source={{ uri: user.avatarUrl }}
+                                style={styles.markerAvatar}
+                            />
+                            <View style={[
+                                styles.markerStatusDot,
+                                { backgroundColor: user.type === 'online' ? '#4CAF50' : user.type === 'away' ? '#FFC107' : user.type === 'busy' ? '#F44336' : '#9E9E9E' }
+                            ]} />
+                        </View>
+                    </Marker>
                 ))}
-            </Map>
+            </MapView>
             
             {/* Custom Callout / User Detail (Since MapLibre handles popups differently, we'll use a floating card) */}
             {selectedUser && (
@@ -237,6 +271,22 @@ const MapScreen: React.FC = () => {
                     </View>
                 </TouchableOpacity>
             )}
+
+            {/* Satellite Toggle Button */}
+            <TouchableOpacity
+                style={[
+                    styles.floatingButton,
+                    styles.satelliteButton,
+                    { backgroundColor: isSatelliteManual ? theme.colors.primary : theme.colors.surface },
+                ]}
+                onPress={toggleSatellite}
+            >
+                <Icon
+                    name={isSatelliteManual ? 'earth' : 'earth-outline'}
+                    size={24}
+                    color={isSatelliteManual ? '#fff' : theme.colors.primary}
+                />
+            </TouchableOpacity>
 
             {/* Recenter / My Location Button */}
             <TouchableOpacity 
@@ -291,28 +341,38 @@ const darkMapStyle = [
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: '#000',
     },
     map: {
-        flex: 1,
+        ...StyleSheet.absoluteFillObject,
     },
-    markerContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 40,
-        height: 40,
-    },
-    markerRing: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+    markerWrapper: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         borderWidth: 3,
-        alignItems: 'center',
-        justifyContent: 'center',
+        overflow: 'hidden',
+        backgroundColor: '#fff',
         elevation: 4,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+    },
+    markerAvatar: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+    },
+    markerStatusDot: {
+        position: 'absolute',
+        bottom: 1,
+        right: 1,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: '#fff',
     },
     statusIndicator: {
         width: 10,
@@ -392,6 +452,9 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.3,
         shadowRadius: 4,
+    },
+    satelliteButton: {
+        bottom: 100,
     },
     overlayHeader: {
         position: 'absolute',
