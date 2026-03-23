@@ -57,7 +57,7 @@ const RootNavigator: React.FC = () => {
             ) : (
                 <>
                     {/* Check if user profile is complete. If not, show setup first */}
-                    {!user?.username ? (
+                    {!user?.gender ? (
                         <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
                     ) : (
                         <>

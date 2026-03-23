@@ -148,6 +148,62 @@ router.get('/matches', async (req: AuthRequest, res: Response) => {
     }
 });
 
+// GET /api/locations/active - Get latest locations of all active users (for discovery)
+router.get('/active', async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+
+        // Get locations of users who have location sharing enabled (handled by inner join or profiles filter)
+        const { data: locations, error: locationsError } = await supabase
+            .from('user_locations')
+            .select(`
+                user_id,
+                latitude,
+                longitude,
+                heading,
+                updated_at,
+                profile:profiles!inner(
+                    full_name,
+                    avatar_url,
+                    last_active,
+                    location_sharing_enabled,
+                    ghost_mode_enabled
+                )
+            `)
+            .neq('user_id', userId)
+            .eq('profile.location_sharing_enabled', true)
+            .gt('updated_at', fifteenMinutesAgo)
+            .limit(50); // Limit to 50 nearby/active users
+
+        if (locationsError) {
+            console.error('Error fetching active locations:', locationsError);
+            return res.status(500).json({ error: 'Failed to fetch active users' });
+        }
+
+        // Transform the data
+        const now = Date.now();
+        const transformedLocations = (locations || []).map((loc: any) => ({
+            user_id: loc.user_id,
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            heading: loc.heading,
+            updated_at: loc.updated_at,
+            profile: {
+                full_name: loc.profile?.full_name || 'Unknown',
+                avatar_url: loc.profile?.avatar_url || '',
+                last_active: loc.profile?.last_active || loc.updated_at,
+            },
+            isOnline: (now - new Date(loc.updated_at).getTime()) < 15 * 60 * 1000,
+        }));
+
+        return res.json({ locations: transformedLocations });
+    } catch (error) {
+        console.error('Error in get active locations:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // DELETE /api/locations - Delete current user's location (when disabling location sharing)
 router.delete('/', async (req: AuthRequest, res: Response) => {
     try {

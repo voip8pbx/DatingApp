@@ -224,8 +224,8 @@ const SwipeScreen: React.FC = () => {
     } = useSwipeStore();
 
     useEffect(() => {
-        // Load initial profiles
-        setProfiles(mockProfiles.slice(0, 5));
+        // Load initial profiles from database
+        loadMoreProfiles();
     }, []);
 
     useEffect(() => {

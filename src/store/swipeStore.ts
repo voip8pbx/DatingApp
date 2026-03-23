@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Profile, SwipeState, FilterPreferences, SwipeDirection, Match } from '../types';
-import { mockProfiles, getRandomProfiles } from '../utils/mockData';
+import { Config } from '../constants/Config';
+import { supabase } from '../supabase';
 
 interface SwipeStore extends SwipeState {
     swipedProfiles: string[];
@@ -41,39 +42,59 @@ export const useSwipeStore = create<SwipeStore>((set, get) => ({
     setLoading: (isLoading) => set({ isLoading }),
 
     loadMoreProfiles: async () => {
-        const { swipedProfiles, isLoading } = get();
-        if (isLoading) return;
+        const { profiles, isLoading, hasMore } = get();
+        if (isLoading || !hasMore) return;
 
         set({ isLoading: true });
 
-        // Simulate API delay
-        await new Promise<void>((resolve) => { setTimeout(resolve, 500); });
+        try {
+            const page = Math.floor(profiles.length / 10) + 1;
+            const response = await fetch(`${Config.API_URL}/api/profiles/discover?page=${page}&limit=10`, {
+                headers: {
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                }
+            });
 
-        // In production, this would call the backend API
-        // For now, use mock data excluding already swiped profiles
-        const newProfiles = getRandomProfiles(10, swipedProfiles);
+            const data = await response.json();
 
-        set((state) => ({
-            profiles: [...state.profiles, ...newProfiles],
-            isLoading: false,
-            hasMore: newProfiles.length > 0,
-        }));
+            if (data.profiles) {
+                set((state) => ({
+                    profiles: [...state.profiles, ...data.profiles],
+                    isLoading: false,
+                    hasMore: data.profiles.length === 10,
+                }));
+            } else {
+                set({ isLoading: false, hasMore: false });
+            }
+        } catch (error) {
+            console.error('Error loading profiles:', error);
+            set({ isLoading: false });
+        }
     },
 
     recordSwipe: async (profileId, direction) => {
         const { addSwipedProfile } = get();
         addSwipedProfile(profileId);
 
-        // Simulate match detection (in production, this would be handled by backend)
-        if (direction === 'like') {
-            // 30% chance of match for demo purposes
-            const isMatch = Math.random() < 0.3;
-            if (isMatch) {
-                return { matched: true, matchId: `match-${Date.now()}` };
-            }
-        }
+        try {
+            const response = await fetch(`${Config.API_URL}/api/swipes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                },
+                body: JSON.stringify({
+                    swiped_id: profileId,
+                    direction: direction
+                })
+            });
 
-        return { matched: false };
+            const data = await response.json();
+            return { matched: data.matched || false, matchId: data.matchId };
+        } catch (error) {
+            console.error('Error recording swipe:', error);
+            return { matched: false };
+        }
     },
 
     reset: () => set({

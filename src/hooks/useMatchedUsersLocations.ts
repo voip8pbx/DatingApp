@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { useLocationStore } from '../store/locationStore';
 import { useMatchStore } from '../store/matchStore';
 import { supabase } from '../supabase';
+import { Config } from '../constants/Config';
 import type { MatchedUserLocation } from '../types';
 
 // DEV_MODE mock data for testing
@@ -98,71 +99,22 @@ export const useMatchedUsersLocations = () => {
         }
 
         try {
-            const { data, error: userError } = await supabase.auth.getUser();
-            if (userError || !data?.user) return;
-            const user = data.user;
+            // Fetch all active locations from our API
+            const response = await fetch(`${Config.API_URL}/api/locations/active`, {
+                headers: {
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                }
+            });
+            
+            const result = await response.json();
 
-            // Get current user's matches
-            const matchUserIds = matches.map(match =>
-                match.user1_id === user.id ? match.user2_id : match.user1_id
-            );
-
-            if (matchUserIds.length === 0) {
-                setMatchedLocations([]);
-                return;
+            if (result.locations) {
+                setMatchedLocations(result.locations);
             }
-
-            // Fetch locations of matched users
-            const { data: locations, error } = await supabase
-                .from('user_locations')
-                .select(`
-                    user_id,
-                    latitude,
-                    longitude,
-                    heading,
-                    updated_at,
-                    profile:profiles(
-                        full_name,
-                        avatar_url,
-                        last_active
-                    )
-                `)
-                .in('user_id', matchUserIds)
-                .gt('updated_at', new Date(Date.now() - LOCATION_HIDDEN_THRESHOLD).toISOString());
-
-            if (error) {
-                console.error('Error fetching matched locations:', error);
-                return;
-            }
-
-            if (!locations) return;
-
-            // Transform and filter locations
-            const now = Date.now();
-            const transformedLocations: MatchedUserLocation[] = locations
-                .filter((loc: any) => {
-                    const updatedAt = new Date(loc.updated_at).getTime();
-                    return (now - updatedAt) < LOCATION_HIDDEN_THRESHOLD;
-                })
-                .map((loc: any) => ({
-                    user_id: loc.user_id,
-                    latitude: loc.latitude,
-                    longitude: loc.longitude,
-                    heading: loc.heading,
-                    updated_at: loc.updated_at,
-                    profile: {
-                        full_name: loc.profile?.full_name || 'Unknown',
-                        avatar_url: loc.profile?.avatar_url || '',
-                        last_active: loc.profile?.last_active || loc.updated_at,
-                    },
-                    isOnline: (now - new Date(loc.updated_at).getTime()) < LOCATION_STALE_THRESHOLD,
-                }));
-
-            setMatchedLocations(transformedLocations);
         } catch (error) {
             console.error('Error in fetchMatchedLocations:', error);
         }
-    }, [matches, setMatchedLocations]);
+    }, [setMatchedLocations]);
 
     const handleLocationChange = useCallback((payload: any) => {
         const { eventType, new: newRecord, old: oldRecord } = payload;

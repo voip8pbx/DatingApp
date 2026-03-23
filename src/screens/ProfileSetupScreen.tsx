@@ -62,11 +62,24 @@ const ProfileSetupScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     const [college, setCollege] = useState('');
 
     // Photo State
-    const [primaryPhoto, setPrimaryPhoto] = useState<{ uri: string; uploading: boolean } | null>(null);
+    const [primaryPhoto, setPrimaryPhoto] = useState<{ uri: string; uploading: boolean, fromRemote?: boolean } | null>(null);
     const [additionalPhotos, setAdditionalPhotos] = useState<{ uri: string; uploading: boolean }[]>([]);
 
     // Validation State
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Initialize from existing user data (e.g. from Google signup)
+    useEffect(() => {
+        if (user) {
+            if (user.username && !username) setUsername(user.username);
+            if (user.full_name && !bio) {
+                // Pre-fill something if we had more fields, but for now we focus on photos
+            }
+            if (user.avatar_url && !primaryPhoto) {
+                setPrimaryPhoto({ uri: user.avatar_url, uploading: false, fromRemote: true });
+            }
+        }
+    }, [user]);
 
     const validateForm = useCallback(() => {
         const newErrors: Record<string, string> = {};

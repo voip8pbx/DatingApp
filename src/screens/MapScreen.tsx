@@ -8,11 +8,12 @@ import {
     Platform,
     PermissionsAndroid,
 } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, MapType, Region } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, MapType, Region, Marker, Callout } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme, useIsDark } from '../hooks/useTheme';
-
+import { useMatchedUsersLocations } from '../hooks/useMatchedUsersLocations';
+import { Image as RNImage } from 'react-native';
 
 // Default map region (Near Delhi)
 const DELHI_REGION = {
@@ -30,6 +31,9 @@ const MapScreen: React.FC = () => {
     const [hasPermission, setHasPermission] = useState<boolean>(false);
     const [mapType, setMapType] = useState<MapType>('standard');
     const [isSatelliteManual, setIsSatelliteManual] = useState<boolean>(false);
+    
+    // Fetch other active users
+    const { matchedLocations } = useMatchedUsersLocations();
 
     useEffect(() => {
         checkPermissionAndInitialize();
@@ -117,8 +121,6 @@ const MapScreen: React.FC = () => {
         });
     };
 
-
-
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <MapView
@@ -132,6 +134,42 @@ const MapScreen: React.FC = () => {
                 customMapStyle={mapType === 'standard' && isDark ? darkMapStyle : []}
                 onRegionChangeComplete={handleRegionChangeComplete}
             >
+                {matchedLocations.map((user) => (
+                    <Marker
+                        key={user.user_id}
+                        coordinate={{ latitude: user.latitude, longitude: user.longitude }}
+                        tracksViewChanges={false}
+                    >
+                        <View style={styles.markerWrapper}>
+                            <RNImage
+                                source={{ uri: user.profile.avatar_url || 'https://i.pravatar.cc/150' }}
+                                style={styles.markerAvatar}
+                            />
+                            <View style={[
+                                styles.markerStatusDot, 
+                                { backgroundColor: user.isOnline ? '#22C55E' : '#94A3B8' }
+                            ]} />
+                        </View>
+                        <Callout>
+                            <View style={styles.calloutWrapper}>
+                                <View style={[styles.calloutBody, { backgroundColor: theme.colors.surface }]}>
+                                    <Text style={[styles.calloutTitle, { color: theme.colors.text }]}>
+                                        {user.profile.full_name}
+                                    </Text>
+                                    <View style={styles.statusRow}>
+                                        <View style={[
+                                            styles.statusDot, 
+                                            { backgroundColor: user.isOnline ? '#22C55E' : '#94A3B8' }
+                                        ]} />
+                                        <Text style={[styles.calloutSub, { color: theme.colors.textSecondary }]}>
+                                            {user.isOnline ? 'Online now' : 'Seen recently'}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </Callout>
+                    </Marker>
+                ))}
             </MapView>
             
 

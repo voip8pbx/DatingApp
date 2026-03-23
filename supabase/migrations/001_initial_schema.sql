@@ -223,6 +223,49 @@ CREATE TRIGGER on_location_update
   EXECUTE PROCEDURE update_location_timestamp();
 
 -- =============================================================================
+-- ROBUST USER SIGNUP TRIGGER
+-- Automatically creates a profile when a user signs up via auth.users (e.g., Google)
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (
+    id, 
+    full_name, 
+    avatar_url, 
+    username, 
+    created_at, 
+    last_active,
+    location_sharing_enabled,
+    ghost_mode_enabled,
+    is_premium
+  )
+  VALUES (
+    new.id, 
+    COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', 'User'), 
+    new.raw_user_meta_data->>'avatar_url', 
+    -- Generate a default unique username from email prefix + random suffix
+    LOWER(SPLIT_PART(new.email, '@', 1)) || '_' || SUBSTRING(gen_random_uuid()::text, 1, 4),
+    NOW(),
+    NOW(),
+    true,
+    false,
+    false
+  );
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  -- Log error or handle gracefully
+  RETURN NEW; 
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- =============================================================================
 -- SCHEMA MIGRATION COMPLETE
 -- =============================================================================
 SELECT 'Vibe Dating App schema migration completed successfully!' AS status;

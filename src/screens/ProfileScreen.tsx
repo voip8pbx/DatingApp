@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 import { useTheme, useToggleTheme, useIsDark } from '../hooks/useTheme';
-import { useAuthStore } from '../store';
+import { useAuthStore, useMatchStore } from '../store';
 import { supabase } from '../supabase';
 
 const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
@@ -24,6 +24,11 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     const toggleTheme = useToggleTheme();
     const isDark = useIsDark();
     const { logout, user, setUser } = useAuthStore();
+    const { matches, loadMatches } = useMatchStore();
+
+    useEffect(() => {
+        loadMatches();
+    }, []);
 
     const [locationSharingEnabled, setLocationSharingEnabled] = useState(
         user?.location_sharing_enabled ?? true
@@ -35,15 +40,13 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     // Get current user profile from auth store
     const userProfile = {
         name: user?.full_name || 'You',
-        age: user?.age || 24,
+        age: user?.age || '',
         bio: user?.bio || 'Looking for someone to go on adventures with! 🌍',
-        city: user?.city || user?.hometown || 'Mumbai',
-        interests: user?.interests || ['music', 'travel', 'photography'],
-        photos: user?.profile_photos || [
-            user?.avatar_url || 'https://i.pravatar.cc/300?img=1',
-            'https://i.pravatar.cc/300?img=2',
-            'https://i.pravatar.cc/300?img=3',
-        ],
+        city: user?.city || user?.hometown || 'Updating...',
+        interests: user?.interests || [],
+        photos: user?.profile_photos && user.profile_photos.length > 0 
+            ? user.profile_photos 
+            : [user?.avatar_url || 'https://i.pravatar.cc/300?img=1'],
     };
 
     const handleLogout = () => {
@@ -185,17 +188,17 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 {/* Stats */}
                 <View style={[styles.statsContainer, { backgroundColor: theme.colors.surface }]}>
                     <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>142</Text>
+                        <Text style={styles.statNumber}>0</Text>
                         <Text style={styles.statLabel}>Likes</Text>
                     </View>
                     <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
                     <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>28</Text>
+                        <Text style={styles.statNumber}>{matches.length}</Text>
                         <Text style={styles.statLabel}>Matches</Text>
                     </View>
                     <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
                     <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>12</Text>
+                        <Text style={styles.statNumber}>{user?.is_premium ? 'YES' : 'NO'}</Text>
                         <Text style={styles.statLabel}>Premium</Text>
                     </View>
                 </View>

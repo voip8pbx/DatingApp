@@ -75,7 +75,7 @@ def enableProguardInReleaseBuilds = false
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 // ── Load .env from project root ──────────────────────────────────────────────
-def envFile = rootProject.file("../../.env")
+def envFile = rootProject.file("../.env")
 def envVars = [:]
 if (envFile.exists()) {
     envFile.eachLine { line ->
@@ -103,6 +103,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        multiDexEnabled true
         // Inject the Maps API key as a manifest placeholder from .env
         manifestPlaceholders = [GOOGLE_MAPS_API_KEY: googleMapsApiKey]
     }
@@ -131,6 +132,8 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    implementation 'com.google.android.gms:play-services-maps:18.2.0'
+    implementation 'androidx.multidex:multidex:2.0.1'
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

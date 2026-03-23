@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { Match, MatchState, Profile } from '../types';
-import { mockProfiles } from '../utils/mockData';
+import { Match, MatchState } from '../types';
+import { Config } from '../constants/Config';
+import { supabase } from '../supabase';
 
 interface MatchStore extends MatchState {
     addMatch: (match: Match) => void;
@@ -9,19 +10,6 @@ interface MatchStore extends MatchState {
     setLoading: (loading: boolean) => void;
     loadMatches: () => Promise<void>;
 }
-
-// Generate some initial mock matches
-const generateMockMatches = (): Match[] => {
-    const currentUserId = 'current-user';
-    return mockProfiles.slice(0, 5).map((profile, index) => ({
-        id: `match-${index + 1}`,
-        user1_id: currentUserId,
-        user2_id: profile.id,
-        created_at: new Date(Date.now() - Math.random() * 86400000 * 7).toISOString(),
-        is_active: true,
-        other_user: profile,
-    }));
-};
 
 export const useMatchStore = create<MatchStore>((set) => ({
     matches: [],
@@ -42,11 +30,23 @@ export const useMatchStore = create<MatchStore>((set) => ({
     loadMatches: async () => {
         set({ isLoading: true });
 
-        // Simulate API delay
-        await new Promise<void>((resolve) => { setTimeout(resolve, 500); });
+        try {
+            const response = await fetch(`${Config.API_URL}/api/matches`, {
+                headers: {
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                }
+            });
 
-        // Load mock matches
-        const matches = generateMockMatches();
-        set({ matches, isLoading: false });
+            const data = await response.json();
+
+            if (Array.isArray(data)) {
+                set({ matches: data, isLoading: false });
+            } else {
+                set({ matches: [], isLoading: false });
+            }
+        } catch (error) {
+            console.error('Error loading matches:', error);
+            set({ isLoading: false });
+        }
     },
 }));
