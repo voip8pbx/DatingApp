@@ -266,6 +266,18 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
 -- =============================================================================
+-- ENABLE REALTIME
+-- =============================================================================
+begin;
+  -- remove the tables from the publication if they exist to avoid errors
+    
+  -- add the tables to the publication
+  alter publication supabase_realtime add table user_locations;
+  alter publication supabase_realtime add table matches;
+  alter publication supabase_realtime add table messages;
+commit;
+
+-- =============================================================================
 -- SCHEMA MIGRATION COMPLETE
 -- =============================================================================
 SELECT 'Vibe Dating App schema migration completed successfully!' AS status;
