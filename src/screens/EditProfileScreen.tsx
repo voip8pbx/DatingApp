@@ -159,6 +159,7 @@ const EditProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             const updatedProfile = {
                 ...user,
                 id: user.id, // Explicitly set and ensure it's a string
+                email: user.email,
                 username: username.toLowerCase(),
                 full_name: fullName || username,
                 age: parseInt(age),

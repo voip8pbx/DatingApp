@@ -13,6 +13,8 @@ import Geolocation from '@react-native-community/geolocation';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme, useIsDark } from '../hooks/useTheme';
 import { useMatchedUsersLocations } from '../hooks/useMatchedUsersLocations';
+import { useLocationTracking } from '../hooks/useLocationTracking';
+import { useFocusEffect } from '@react-navigation/native';
 import { Image as RNImage } from 'react-native';
 
 // Default map region (Near Delhi)
@@ -34,6 +36,14 @@ const MapScreen: React.FC = () => {
     
     // Fetch other active users
     const { matchedLocations } = useMatchedUsersLocations();
+    const { startTracking, stopTracking } = useLocationTracking();
+
+    useFocusEffect(
+        React.useCallback(() => {
+            startTracking();
+            return () => stopTracking();
+        }, [startTracking, stopTracking])
+    );
 
     useEffect(() => {
         checkPermissionAndInitialize();

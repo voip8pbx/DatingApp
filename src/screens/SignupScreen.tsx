@@ -46,12 +46,27 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
         }
 
         setIsLoading(true);
-        // Simulate signup - in production, this would call Supabase
-        setTimeout(() => {
+        try {
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        full_name: name,
+                    }
+                }
+            });
+
+            if (error) throw error;
+
+            if (data.user) {
+                Alert.alert('Success', 'Account created! Please check your email for verification.');
+            }
+        } catch (error: any) {
+            Alert.alert('Signup Failed', error.message || 'Check your details');
+        } finally {
             setIsLoading(false);
-            // Navigate to profile setup
-            navigation.navigate('ProfileSetup');
-        }, 1000);
+        }
     };
 
     const handleGoogleSignup = async () => {
@@ -73,8 +88,9 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
             if (error) throw error;
 
             if (data.user) {
-                // Navigate to profile setup or home
-                navigation.navigate('ProfileSetup');
+                console.log('Google Signup/Login Success:', data.user.email);
+                // No need to manually navigate as the RootNavigator's 
+                // auth listener will pick up the session change
             }
         } catch (error: any) {
             if (error.code === statusCodes.SIGN_IN_CANCELLED) {

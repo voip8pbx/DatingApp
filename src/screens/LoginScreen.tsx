@@ -40,41 +40,22 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         }
 
         setIsLoading(true);
-        // Simulate login - in production, this would call Supabase
-        setTimeout(() => {
-            setIsLoading(false);
-            // Set mock user and navigate to main
-            setUser({
-                id: 'current-user',
-                username: 'demo_user',
-                full_name: 'Demo User',
-                age: 24,
-                gender: 'male',
-                interested_gender: ['female', 'non-binary'],
-                height: 175,
-                height_unit: 'cm',
-                religion: 'None',
-                bio: 'Demo user',
-                drinking_habit: 'occasionally',
-                smoking_habit: 'never',
-                hometown: 'Mumbai',
-                school_name: 'Demo School',
-                college_name: 'Demo University',
-                location: 'Mumbai',
-                city: 'Mumbai',
-                profile_photos: ['https://i.pravatar.cc/300?img=1'],
-                avatar_url: 'https://i.pravatar.cc/300?img=1',
-                interests: ['music', 'travel'],
-                max_distance: 50,
-                age_min: 18,
-                age_max: 30,
-                is_premium: false,
-                last_active: new Date().toISOString(),
-                created_at: new Date().toISOString(),
-                location_sharing_enabled: true,
-                ghost_mode_enabled: false,
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
             });
-        }, 1000);
+
+            if (error) throw error;
+
+            if (data.user) {
+                console.log('User signed in:', data.user.email);
+            }
+        } catch (error: any) {
+            Alert.alert('Login Failed', error.message || 'Check your credentials');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleGoogleLogin = async () => {
@@ -96,7 +77,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             if (error) throw error;
 
             if (data.user) {
-                console.log('User signed in successfully', data.user);
+                console.log('User signed in successfully', data.user.email);
             }
         } catch (error: any) {
             if (error.code === statusCodes.SIGN_IN_CANCELLED) {

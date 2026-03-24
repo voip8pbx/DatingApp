@@ -1,75 +1,14 @@
 import { useEffect, useCallback } from 'react';
 import { useLocationStore } from '../store/locationStore';
-import { useMatchStore } from '../store/matchStore';
+import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabase';
 import { Config } from '../constants/Config';
 import type { MatchedUserLocation } from '../types';
 
 // DEV_MODE mock data for testing
-const DEV_MODE = __DEV__;
+const DEV_MODE = false;
 
-const MOCK_MATCHED_LOCATIONS: MatchedUserLocation[] = DEV_MODE ? [
-    {
-        user_id: 'mock-1',
-        latitude: 19.0760 + (Math.random() - 0.5) * 0.02,
-        longitude: 72.8777 + (Math.random() - 0.5) * 0.02,
-        profile: {
-            full_name: 'Aanya S.',
-            avatar_url: 'https://i.pravatar.cc/150?img=5',
-            last_active: new Date().toISOString()
-        },
-        isOnline: true,
-        updated_at: new Date().toISOString(),
-    },
-    {
-        user_id: 'mock-2',
-        latitude: 19.0760 + (Math.random() - 0.5) * 0.02,
-        longitude: 72.8777 + (Math.random() - 0.5) * 0.02,
-        profile: {
-            full_name: 'Vihaan K.',
-            avatar_url: 'https://i.pravatar.cc/150?img=8',
-            last_active: new Date().toISOString()
-        },
-        isOnline: true,
-        updated_at: new Date().toISOString(),
-    },
-    {
-        user_id: 'mock-3',
-        latitude: 19.0760 + (Math.random() - 0.5) * 0.02,
-        longitude: 72.8777 + (Math.random() - 0.5) * 0.02,
-        profile: {
-            full_name: 'Saanvi M.',
-            avatar_url: 'https://i.pravatar.cc/150?img=9',
-            last_active: new Date(Date.now() - 10 * 60 * 1000).toISOString()
-        },
-        isOnline: false,
-        updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    },
-    {
-        user_id: 'mock-4',
-        latitude: 19.0760 + (Math.random() - 0.5) * 0.02,
-        longitude: 72.8777 + (Math.random() - 0.5) * 0.02,
-        profile: {
-            full_name: 'Arjun P.',
-            avatar_url: 'https://i.pravatar.cc/150?img=12',
-            last_active: new Date(Date.now() - 45 * 60 * 1000).toISOString()
-        },
-        isOnline: false,
-        updated_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-    },
-    {
-        user_id: 'mock-5',
-        latitude: 19.0760 + (Math.random() - 0.5) * 0.02,
-        longitude: 72.8777 + (Math.random() - 0.5) * 0.02,
-        profile: {
-            full_name: 'Myra R.',
-            avatar_url: 'https://i.pravatar.cc/150?img=20',
-            last_active: new Date().toISOString()
-        },
-        isOnline: true,
-        updated_at: new Date().toISOString(),
-    },
-] : [];
+const MOCK_MATCHED_LOCATIONS: MatchedUserLocation[] = [];
 
 const LOCATION_STALE_THRESHOLD = 15 * 60 * 1000; // 15 minutes
 const LOCATION_HIDDEN_THRESHOLD = 60 * 60 * 1000; // 60 minutes
@@ -83,18 +22,11 @@ export const useMatchedUsersLocations = () => {
         currentLocation
     } = useLocationStore();
 
-    const { matches } = useMatchStore();
+    const { user: currentUser } = useAuthStore();
 
     const fetchMatchedLocations = useCallback(async () => {
         // In DEV_MODE, return mock data
         if (DEV_MODE) {
-            // Simulate movement for mock data
-            const mockWithMovement = MOCK_MATCHED_LOCATIONS.map(user => ({
-                ...user,
-                latitude: user.latitude + (Math.random() - 0.5) * 0.0001,
-                longitude: user.longitude + (Math.random() - 0.5) * 0.0001,
-            }));
-            setMatchedLocations(mockWithMovement);
             return;
         }
 
@@ -120,6 +52,11 @@ export const useMatchedUsersLocations = () => {
         const { eventType, new: newRecord, old: oldRecord } = payload;
 
         if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            // Ignore ourselves as MapScreen shows current user via showsUserLocation={true}
+            if (currentUser && newRecord.user_id === currentUser.id) {
+                return;
+            }
+            
             const updatedAt = new Date(newRecord.updated_at).getTime();
             const now = Date.now();
 
@@ -128,23 +65,14 @@ export const useMatchedUsersLocations = () => {
                 return;
             }
 
-            // Check if this user is actually a match
-            const matchUserIds = matches.map(match =>
-                match.user1_id === newRecord.user_id || match.user2_id === newRecord.user_id
-            );
-
-            if (!matchUserIds.includes(true)) {
-                return;
-            }
-
             // Fetch the profile for this location
             supabase
                 .from('profiles')
-                .select('full_name, avatar_url, last_active')
+                .select('full_name, avatar_url, last_active, location_sharing_enabled')
                 .eq('id', newRecord.user_id)
                 .single()
                 .then(({ data: profile }) => {
-                    if (profile) {
+                    if (profile && profile.location_sharing_enabled) {
                         upsertMatchedLocation({
                             user_id: newRecord.user_id,
                             latitude: newRecord.latitude,
@@ -163,7 +91,7 @@ export const useMatchedUsersLocations = () => {
         } else if (eventType === 'DELETE') {
             removeMatchedLocation(oldRecord.user_id);
         }
-    }, [matches, upsertMatchedLocation, removeMatchedLocation]);
+    }, [upsertMatchedLocation, removeMatchedLocation]);
 
     // Subscribe to realtime updates
     useEffect(() => {

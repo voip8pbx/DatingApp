@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS profiles CASCADE;
 
 CREATE TABLE IF NOT EXISTS profiles (
   id uuid references auth.users on delete cascade primary key,
+  email text,
   username text unique,
   full_name text,
   age int check (age >= 18),
@@ -232,6 +233,7 @@ RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO public.profiles (
     id, 
+    email,
     full_name, 
     avatar_url, 
     username, 
@@ -243,6 +245,7 @@ BEGIN
   )
   VALUES (
     new.id, 
+    new.email,
     COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', 'User'), 
     new.raw_user_meta_data->>'avatar_url', 
     -- Generate a default unique username from email prefix + random suffix

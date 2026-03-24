@@ -184,6 +184,7 @@ const ProfileSetupScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
             const profileData: any = {
                 id: authUser.id,
+                email: authUser.email,
                 username: username.toLowerCase(),
                 full_name: username,
                 age: parseInt(age),
