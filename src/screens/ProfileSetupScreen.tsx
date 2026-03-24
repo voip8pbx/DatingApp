@@ -20,7 +20,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 
 import { useTheme } from '../hooks/useTheme';
 import { useAuthStore } from '../store';
-import { supabase } from '../supabase';
+import { supabase, uploadProfileImage } from '../supabase';
 import { Gender } from '../types';
 
 interface SectionHeaderProps {
@@ -136,21 +136,17 @@ const ProfileSetupScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         }
 
         try {
-            // In a real app, we would upload to Supabase Storage here
-            // const fileName = `${user?.id}/${Date.now()}.jpg`;
-            // const uploadRes = await uploadProfileImage(user!.id, uri);
-
-            // Simulating upload
-            await new Promise(resolve => setTimeout(() => resolve(null), 1500));
+            // Upload to Supabase Storage
+            const uploadUri = await uploadProfileImage(user!.id, uri);
 
             if (isPrimary) {
-                setPrimaryPhoto({ uri, uploading: false });
+                setPrimaryPhoto({ uri: uploadUri, uploading: false });
             } else {
                 setAdditionalPhotos(prev => {
                     const updated = [...prev];
                     const photoIndex = index !== undefined ? index : updated.length - 1;
                     if (updated[photoIndex]) {
-                        updated[photoIndex] = { ...updated[photoIndex], uploading: false };
+                        updated[photoIndex] = { uri: uploadUri, uploading: false };
                     }
                     return updated;
                 });

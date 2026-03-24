@@ -36,23 +36,40 @@ export const getStorageUrl = (bucket: string, path: string) => {
     return `${supabaseConfig.url}/storage/v1/object/public/${bucket}/${path}`;
 };
 
-// Upload profile image
+// Upload profile image to Supabase Storage
 export const uploadProfileImage = async (userId: string, imageUri: string) => {
-    const fileName = `${userId}/${Date.now()}.jpg`;
-    const response = await fetch(imageUri);
-    const blob = await response.blob();
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase.storage
-        .from(STORAGE_BUCKETS.PROFILES)
-        .upload(fileName, blob);
+        const fileName = `${userId}/${Date.now()}.jpg`;
+        
+        // Convert to Blob for upload
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
 
-    if (error) throw error;
+        const { data, error } = await supabase.storage
+            .from(STORAGE_BUCKETS.PROFILES)
+            .upload(fileName, blob, {
+                contentType: 'image/jpeg',
+                cacheControl: '3600',
+                upsert: true
+            });
 
-    const { data: urlData } = supabase.storage
-        .from(STORAGE_BUCKETS.PROFILES)
-        .getPublicUrl(fileName);
+        if (error) {
+            console.error('Upload error detail:', error);
+            throw error;
+        }
 
-    return urlData.publicUrl;
+        const { data: urlData } = supabase.storage
+            .from(STORAGE_BUCKETS.PROFILES)
+            .getPublicUrl(fileName);
+
+        return urlData.publicUrl;
+    } catch (error) {
+        console.error('Error in uploadProfileImage:', error);
+        throw error;
+    }
 };
 
 // Real-time subscriptions

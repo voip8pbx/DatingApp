@@ -80,6 +80,7 @@ export const useLocationTracking = () => {
             const user = data.user;
 
             const { error: upsertError } = await supabase.from('user_locations').upsert({
+                id: user.id,
                 user_id: user.id,
                 latitude,
                 longitude,

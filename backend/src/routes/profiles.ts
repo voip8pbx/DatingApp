@@ -36,15 +36,18 @@ router.get('/discover', verifyToken, async (req: AuthRequest, res: Response) => 
             .from('profiles')
             .select('*')
             .neq('id', userId)
-            .not('id', 'in', `(${swipedIds.join(',')})`)
             .gte('age', currentProfile.age_min || 18)
             .lte('age', currentProfile.age_max || 35)
             .order('last_active', { ascending: false })
             .range(offset, offset + limit - 1);
 
+        if (swipedIds.length > 0) {
+            query = query.not('id', 'in', `(${swipedIds.join(',')})`);
+        }
+
         // Apply gender filter
-        if (currentProfile.interested_in && currentProfile.interested_in.length > 0) {
-            query = query.in('gender', currentProfile.interested_in);
+        if (currentProfile.interested_gender && currentProfile.interested_gender.length > 0) {
+            query = query.in('gender', currentProfile.interested_gender);
         }
 
         const { data: profiles, error } = await query;
