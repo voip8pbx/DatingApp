@@ -20,7 +20,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 
 import { useTheme } from '../hooks/useTheme';
 import { useAuthStore } from '../store';
-import { supabase } from '../supabase';
+import { supabase, uploadProfileImage } from '../supabase';
 import { Gender } from '../types';
 
 interface SectionHeaderProps {
@@ -94,11 +94,14 @@ const EditProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         const result = await launchImageLibrary({
             mediaType: 'photo',
             quality: 0.8,
+            includeBase64: true,
         });
 
         if (result.didCancel || !result.assets?.[0]?.uri) return;
 
-        const uri = result.assets[0].uri;
+        const asset = result.assets[0];
+        const uri = asset.uri!;
+        const base64 = asset.base64;
 
         if (isPrimary) {
             setPrimaryPhoto({ uri, uploading: true });
@@ -113,17 +116,17 @@ const EditProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         }
 
         try {
-            // Simulating upload
-            await new Promise(resolve => setTimeout(() => resolve(null), 1000));
+            // Real upload to Supabase Storage
+            const uploadUri = await uploadProfileImage(user!.id, uri, base64 || undefined);
 
             if (isPrimary) {
-                setPrimaryPhoto({ uri, uploading: false });
+                setPrimaryPhoto({ uri: uploadUri, uploading: false });
             } else {
                 setAdditionalPhotos(prev => {
                     const updated = [...prev];
                     const photoIndex = index !== undefined ? index : updated.length - 1;
                     if (updated[photoIndex]) {
-                        updated[photoIndex] = { ...updated[photoIndex], uploading: false };
+                        updated[photoIndex] = { uri: uploadUri, uploading: false };
                     }
                     return updated;
                 });

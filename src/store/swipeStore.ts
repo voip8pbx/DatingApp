@@ -57,7 +57,7 @@ export const useSwipeStore = create<SwipeStore>((set, get) => ({
 
             const data = await response.json();
 
-            if (data.profiles) {
+            if (data.profiles && data.profiles.length > 0) {
                 set((state) => ({
                     profiles: [...state.profiles, ...data.profiles],
                     isLoading: false,
@@ -68,7 +68,7 @@ export const useSwipeStore = create<SwipeStore>((set, get) => ({
             }
         } catch (error) {
             console.error('Error loading profiles:', error);
-            set({ isLoading: false });
+            set({ isLoading: false, hasMore: false });
         }
     },
 

@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
 import { useSwipeStore } from '../store';
 import { Profile, SwipeDirection } from '../types';
-import { mockProfiles } from '../utils/mockData';
+
 
 const { width, height } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.25;
@@ -139,7 +139,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ profile, onSwipe, isTop, inde
                             <Text style={styles.cardName}>{profile.full_name}</Text>
                             <Text style={styles.cardAge}>{profile.age}</Text>
                         </View>
-                        
+
                         {profile.height && (
                             <View style={styles.metaRow}>
                                 <Icon name="resize" size={14} color={theme.colors.white} />
@@ -572,7 +572,8 @@ const styles = StyleSheet.create({
     likeButton: {
         width: 64,
         height: 64,
-        backgroundColor: '#00E5A0',
+        borderWidth: 2,
+        borderColor: '#00E5A0',
     },
     emptyState: {
         alignItems: 'center',

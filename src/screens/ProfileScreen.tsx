@@ -17,6 +17,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme, useToggleTheme, useIsDark } from '../hooks/useTheme';
 import { useAuthStore, useMatchStore } from '../store';
 import { supabase } from '../supabase';
+import { Config } from '../constants/Config';
+import { Profile } from '../types';
 
 const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     const theme = useTheme();
@@ -30,12 +32,50 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         loadMatches();
     }, []);
 
+    // Fetch profiles of other users
+    const fetchProfiles = async () => {
+        if (!user) return;
+
+        setLoadingProfiles(true);
+        setErrorProfiles(null);
+
+        try {
+            // Fetch profiles directly from Supabase (bypassing backend gender filters)
+            const { data: profilesData, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .neq('id', user.id) // Exclude current user
+                .order('last_active', { ascending: false });
+
+            if (error) {
+                throw error;
+            }
+
+            setProfiles(profilesData || []);
+        } catch (error) {
+            console.error('Error fetching profiles:', error);
+            setErrorProfiles('Failed to load profiles');
+            setProfiles([]);
+        } finally {
+            setLoadingProfiles(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchProfiles();
+    }, [user]);
+
     const [locationSharingEnabled, setLocationSharingEnabled] = useState(
         user?.location_sharing_enabled ?? true
     );
     const [ghostModeEnabled, setGhostModeEnabled] = useState(
         user?.ghost_mode_enabled ?? false
     );
+
+    // State for displaying other profiles
+    const [profiles, setProfiles] = useState<Profile[]>([]);
+    const [loadingProfiles, setLoadingProfiles] = useState(true);
+    const [errorProfiles, setErrorProfiles] = useState<string | null>(null);
 
     // Get current user profile from auth store
     const userProfile = {
@@ -44,8 +84,8 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         bio: user?.bio || 'Looking for someone to go on adventures with! 🌍',
         city: user?.city || user?.hometown || 'Updating...',
         interests: user?.interests || [],
-        photos: user?.profile_photos && user.profile_photos.length > 0 
-            ? user.profile_photos 
+        photos: user?.profile_photos && user.profile_photos.length > 0
+            ? user.profile_photos
             : [user?.avatar_url || 'https://i.pravatar.cc/300?img=1'],
     };
 
@@ -184,6 +224,23 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                         </View>
                     </View>
                 </View>
+
+                {/* Additional Photos Grid */}
+                {userProfile.photos.length > 1 && (
+                    <View style={styles.photosGridContainer}>
+                        <Text style={styles.photosGridTitle}>More Photos</Text>
+                        <View style={styles.photosGrid}>
+                            {userProfile.photos.slice(1, 5).map((photo, index) => (
+                                <View key={index} style={styles.photoGridItem}>
+                                    <Image
+                                        source={{ uri: photo }}
+                                        style={styles.photoGridImage}
+                                    />
+                                </View>
+                            ))}
+                        </View>
+                    </View>
+                )}
 
                 {/* Stats */}
                 <View style={[styles.statsContainer, { backgroundColor: theme.colors.surface }]}>
@@ -450,6 +507,100 @@ const styles = StyleSheet.create({
     settingSubtitle: {
         fontSize: 12,
         marginTop: 2,
+    },
+    // Styles for profile discovery
+    loadingContainer: {
+        padding: 20,
+        textAlign: 'center',
+    },
+    loadingText: {
+        fontSize: 16,
+    },
+    errorContainer: {
+        padding: 20,
+        textAlign: 'center',
+    },
+    errorText: {
+        fontSize: 16,
+        marginBottom: 12,
+    },
+    retryButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+    },
+    retryText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    emptyContainer: {
+        padding: 20,
+        textAlign: 'center',
+    },
+    emptyText: {
+        fontSize: 16,
+    },
+    profilesList: {
+        padding: 16,
+    },
+    profileCard: {
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+    },
+    profileCardImage: {
+        width: '100%',
+        height: 200,
+        borderRadius: 12,
+        marginBottom: 12,
+    },
+    profileCardInfo: {
+        flex: 1,
+    },
+    profileCardName: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 4,
+    },
+    profileCardLocation: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginBottom: 8,
+    },
+    profileCardCity: {
+        fontSize: 14,
+    },
+    profileCardBio: {
+        fontSize: 14,
+        marginBottom: 12,
+        lineHeight: 20,
+    },
+    // Photo grid styles
+    photosGridContainer: {
+        paddingHorizontal: 16,
+        marginTop: 20,
+    },
+    photosGridTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#A0A0B0',
+        marginBottom: 12,
+    },
+    photosGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    photoGridItem: {
+        width: '48%',
+        aspectRatio: 1,
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
+    photoGridImage: {
+        width: '100%',
+        height: '100%',
     },
 });
 

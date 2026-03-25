@@ -32,6 +32,9 @@ export interface Profile {
     created_at: string;
     location_sharing_enabled: boolean;
     ghost_mode_enabled: boolean;
+    // For tracking previous state during profile updates (not persisted to DB)
+    previous_profile_photos?: string[];
+    previous_avatar_url?: string | null;
 }
 
 export interface Swipe {

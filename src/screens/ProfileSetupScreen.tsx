@@ -117,27 +117,30 @@ const ProfileSetupScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         const result = await launchImageLibrary({
             mediaType: 'photo',
             quality: 0.8,
+            includeBase64: true,
         });
 
         if (result.didCancel || !result.assets?.[0]?.uri) return;
 
-        const uri = result.assets[0].uri;
+        const asset = result.assets[0];
+        const uri = asset.uri;
+        const base64 = asset.base64;
 
         if (isPrimary) {
-            setPrimaryPhoto({ uri, uploading: true });
+            setPrimaryPhoto({ uri: uri!, uploading: true });
         } else {
             const newPhotos = [...additionalPhotos];
             if (index !== undefined && index < newPhotos.length) {
-                newPhotos[index] = { uri, uploading: true };
+                newPhotos[index] = { uri: uri!, uploading: true };
             } else {
-                newPhotos.push({ uri, uploading: true });
+                newPhotos.push({ uri: uri!, uploading: true });
             }
             setAdditionalPhotos(newPhotos);
         }
 
         try {
             // Upload to Supabase Storage
-            const uploadUri = await uploadProfileImage(user!.id, uri);
+            const uploadUri = await uploadProfileImage(user!.id, uri!, base64 || undefined);
 
             if (isPrimary) {
                 setPrimaryPhoto({ uri: uploadUri, uploading: false });

@@ -248,7 +248,6 @@ BEGIN
     new.email,
     COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', 'User'), 
     new.raw_user_meta_data->>'avatar_url', 
-    -- Generate a default unique username from email prefix + random suffix
     LOWER(SPLIT_PART(new.email, '@', 1)) || '_' || SUBSTRING(gen_random_uuid()::text, 1, 4),
     NOW(),
     NOW(),
@@ -258,7 +257,6 @@ BEGIN
   );
   RETURN NEW;
 EXCEPTION WHEN OTHERS THEN
-  -- Log error or handle gracefully
   RETURN NEW; 
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -272,9 +270,6 @@ CREATE TRIGGER on_auth_user_created
 -- ENABLE REALTIME
 -- =============================================================================
 begin;
-  -- remove the tables from the publication if they exist to avoid errors
-    
-  -- add the tables to the publication
   alter publication supabase_realtime add table user_locations;
   alter publication supabase_realtime add table matches;
   alter publication supabase_realtime add table messages;
@@ -284,3 +279,148 @@ commit;
 -- SCHEMA MIGRATION COMPLETE
 -- =============================================================================
 SELECT 'Vibe Dating App schema migration completed successfully!' AS status;
+
+-- =============================================================================
+-- STORAGE BUCKETS POLICIES (for image uploads)
+-- =============================================================================
+
+-- 1. Allow everyone to see images (Make sure your bucket is called 'profiles')
+DROP POLICY IF EXISTS "Public Read Access" on storage.objects;
+CREATE POLICY "Public Read Access" ON storage.objects FOR SELECT USING (bucket_id = 'profiles');
+
+-- 2. Allow authenticated users to upload their own images
+DROP POLICY IF EXISTS "Authenticated users can upload" on storage.objects;
+CREATE POLICY "Authenticated users can upload" ON storage.objects FOR INSERT 
+WITH CHECK (bucket_id = 'profiles' AND auth.role() = 'authenticated');
+
+-- 3. Allow users to update/delete their own images
+DROP POLICY IF EXISTS "Users can update their own images" on storage.objects;
+CREATE POLICY "Users can update their own images" ON storage.objects FOR UPDATE 
+USING (bucket_id = 'profiles' AND auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Users can delete their own images" on storage.objects;
+CREATE POLICY "Users can delete their own images" ON storage.objects FOR DELETE 
+USING (bucket_id = 'profiles' AND auth.role() = 'authenticated');
+
+-- =============================================================================
+-- PHOTO HISTORY TABLE (for tracking photo changes and cleanup)
+-- =============================================================================
+DROP TABLE IF EXISTS photo_history CASCADE;
+
+CREATE TABLE photo_history (
+    id uuid default gen_random_uuid() primary key,
+    user_id uuid references profiles(id) on delete cascade not null,
+    photo_url text not null,
+    photo_type text check (photo_type in ('avatar', 'profile_photo')) not null,
+    is_deleted boolean default false,
+    deleted_at timestamptz,
+    created_at timestamptz default now()
+);
+
+-- Enable RLS
+ALTER TABLE photo_history enable row level security;
+
+-- RLS Policies for photo_history
+DROP POLICY IF EXISTS "Users can view own photo history" ON photo_history;
+CREATE POLICY "Users can view own photo history" ON photo_history FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own photo history" ON photo_history;
+CREATE POLICY "Users can insert own photo history" ON photo_history FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own photo history" ON photo_history;
+CREATE POLICY "Users can update own photo history" ON photo_history FOR UPDATE USING (auth.uid() = user_id);
+
+-- Index for photo_history
+CREATE INDEX IF NOT EXISTS idx_photo_history_user ON photo_history(user_id);
+
+-- =============================================================================
+-- FUNCTION TO CLEANUP ORPHANED PHOTOS
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION cleanup_orphaned_photos()
+RETURNS void AS $$
+DECLARE
+    orphaned_photo record;
+    photo_path text;
+BEGIN
+    FOR orphaned_photo IN
+        SELECT ph.id, ph.photo_url, ph.user_id
+        FROM photo_history ph
+        WHERE ph.is_deleted = true
+        AND ph.deleted_at IS NOT NULL
+        AND ph.deleted_at < NOW() - INTERVAL '1 day'
+    LOOP
+        photo_path := SPLIT_PART(orphaned_photo.photo_url, '/storage/v1/object/public/profiles/', 2);
+        
+        IF photo_path IS NOT NULL THEN
+            BEGIN
+                DELETE FROM storage.objects 
+                WHERE bucket_id = 'profiles' 
+                AND name = photo_path;
+                
+                DELETE FROM photo_history WHERE id = orphaned_photo.id;
+            EXCEPTION WHEN OTHERS THEN
+                RAISE NOTICE 'Failed to cleanup photo: %', orphaned_photo.photo_url;
+            END;
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =============================================================================
+-- FUNCTION TO TRACK PHOTO DELETION
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION track_photo_deletion()
+RETURNS TRIGGER AS $$
+DECLARE
+    photo text;
+BEGIN
+    IF TG_OP = 'UPDATE' AND (OLD.profile_photos IS DISTINCT FROM NEW.profile_photos OR OLD.avatar_url IS DISTINCT FROM NEW.avatar_url) THEN
+        
+        IF OLD.profile_photos IS NOT NULL AND NEW.profile_photos IS NOT NULL THEN
+            FOR photo IN SELECT unnest(OLD.profile_photos) EXCEPT SELECT unnest(NEW.profile_photos)
+            LOOP
+                INSERT INTO photo_history (user_id, photo_url, photo_type, is_deleted, deleted_at)
+                VALUES (NEW.id, photo, 'profile_photo', true, NOW())
+                ON CONFLICT DO NOTHING;
+            END LOOP;
+        END IF;
+        
+        IF OLD.avatar_url IS NOT NULL AND NEW.avatar_url IS DISTINCT FROM OLD.avatar_url THEN
+            INSERT INTO photo_history (user_id, photo_url, photo_type, is_deleted, deleted_at)
+            VALUES (NEW.id, OLD.avatar_url, 'avatar', true, NOW())
+            ON CONFLICT DO NOTHING;
+        END IF;
+        
+        IF NEW.profile_photos IS NOT NULL THEN
+            FOR photo IN SELECT unnest(NEW.profile_photos)
+            LOOP
+                INSERT INTO photo_history (user_id, photo_url, photo_type, is_deleted)
+                VALUES (NEW.id, photo, 'profile_photo', false)
+                ON CONFLICT DO NOTHING;
+            END LOOP;
+        END IF;
+        
+        IF NEW.avatar_url IS NOT NULL THEN
+            INSERT INTO photo_history (user_id, photo_url, photo_type, is_deleted)
+            VALUES (NEW.id, NEW.avatar_url, 'avatar', false)
+            ON CONFLICT DO NOTHING;
+        END IF;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for photo tracking
+DROP TRIGGER IF EXISTS track_photo_changes ON profiles;
+CREATE TRIGGER track_photo_changes
+    AFTER UPDATE ON profiles
+    FOR EACH ROW
+    EXECUTE PROCEDURE track_photo_deletion();
+
+-- =============================================================================
+-- SCHEMA MIGRATION COMPLETE
+-- =============================================================================
+SELECT 'Vibe Dating App schema migration completed with image cleanup support!' AS status;
