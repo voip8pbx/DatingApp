@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { Match, MatchState } from '../types';
-import { Config } from '../constants/Config';
-import { supabase } from '../supabase';
+import { supabase, fetchMatches } from '../supabase';
 
 interface MatchStore extends MatchState {
     addMatch: (match: Match) => void;
@@ -31,19 +30,14 @@ export const useMatchStore = create<MatchStore>((set) => ({
         set({ isLoading: true });
 
         try {
-            const response = await fetch(`${Config.API_URL}/api/matches`, {
-                headers: {
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-                }
-            });
-
-            const data = await response.json();
-
-            if (Array.isArray(data)) {
-                set({ matches: data, isLoading: false });
-            } else {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
                 set({ matches: [], isLoading: false });
+                return;
             }
+
+            const matches = await fetchMatches(user.id);
+            set({ matches: matches as any, isLoading: false });
         } catch (error) {
             console.error('Error loading matches:', error);
             set({ isLoading: false });

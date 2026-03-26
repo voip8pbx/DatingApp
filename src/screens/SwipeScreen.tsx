@@ -15,8 +15,10 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../hooks/useTheme';
-import { useSwipeStore } from '../store';
+import { useSwipeStore, useAuthStore } from '../store';
 import { Profile, SwipeDirection } from '../types';
+import { recordSwipe } from '../supabase';
+import MatchPopup from '../components/MatchPopup';
 
 
 const { width, height } = Dimensions.get('window');
@@ -207,16 +209,18 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ profile, onSwipe, isTop, inde
     );
 };
 
-const SwipeScreen: React.FC = () => {
+const SwipeScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
     const theme = useTheme();
     const insets = useSafeAreaInsets();
     const [showMatch, setShowMatch] = useState(false);
     const [matchedProfile, setMatchedProfile] = useState<Profile | null>(null);
+    const [processedMatchIds, setProcessedMatchIds] = useState<Set<string>>(new Set());
+    const { user } = useAuthStore();
 
     const {
         profiles,
         setProfiles,
-        recordSwipe,
+        addSwipedProfile,
         loadMoreProfiles,
         isLoading,
         hasMore,
@@ -236,14 +240,28 @@ const SwipeScreen: React.FC = () => {
     }, [currentIndex, profiles.length, hasMore, isLoading]);
 
     const handleSwipe = useCallback(async (profile: Profile, direction: SwipeDirection) => {
-        const result = await recordSwipe(profile.id, direction);
+        if (!user) return;
 
-        if (result.matched) {
+        // Prevent duplicate match popups
+        const matchKey = `${profile.id}-${direction}`;
+        if (processedMatchIds.has(matchKey)) return;
+        setProcessedMatchIds(prev => new Set(prev).add(matchKey));
+
+        // Add to swiped profiles
+        addSwipedProfile(profile.id);
+
+        // Record swipe and check for match
+        const result = await recordSwipe(user.id, profile.id, direction);
+
+        if (result.matched && result.success) {
             setMatchedProfile(profile);
             setShowMatch(true);
-            setTimeout(() => setShowMatch(false), 3000);
         }
-    }, [recordSwipe]);
+    }, [user, addSwipedProfile, processedMatchIds]);
+
+    const handleCloseMatch = useCallback(() => {
+        setShowMatch(false);
+    }, []);
 
     const visibleProfiles = profiles.slice(currentIndex, currentIndex + 3);
 
@@ -304,27 +322,13 @@ const SwipeScreen: React.FC = () => {
                 </TouchableOpacity>
             </View>
 
-            {/* Match Modal */}
-            {showMatch && matchedProfile && (
-                <View style={styles.matchOverlay}>
-                    <LinearGradient
-                        colors={theme.colors.gradient as [string, string, string]}
-                        style={styles.matchGradient}
-                    >
-                        <Text style={styles.matchTitle}>It's a Match! 🎉</Text>
-                        <View style={styles.matchAvatars}>
-                            <Image
-                                source={{ uri: matchedProfile.profile_photos[0] }}
-                                style={styles.matchAvatar}
-                            />
-                            <View style={styles.matchAvatarPlaceholder} />
-                        </View>
-                        <Text style={styles.matchSubtitle}>
-                            You and {matchedProfile.full_name} liked each other
-                        </Text>
-                    </LinearGradient>
-                </View>
-            )}
+            {/* Match Popup with Sparkles Animation */}
+            <MatchPopup
+                visible={showMatch}
+                matchedProfile={matchedProfile}
+                onClose={handleCloseMatch}
+                currentUserPhoto={user?.profile_photos?.[0] || user?.avatar_url || undefined}
+            />
         </View>
     );
 };

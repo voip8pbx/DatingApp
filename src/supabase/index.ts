@@ -414,4 +414,199 @@ export const updateProfileWithCleanup = async (
     }
 };
 
+// ============================================================================
+// MATCH DETECTION FUNCTIONS
+// ============================================================================
+
+export interface SwipeResult {
+    success: boolean;
+    matched: boolean;
+    matchId?: string;
+    error?: string;
+}
+
+/**
+ * Records a swipe (like/dislike/superlike) and checks for mutual match
+ * @param swiperId - Current user's ID
+ * @param swipedId - Profile being swiped on
+ * @param direction - like, dislike, or superlike
+ * @returns SwipeResult with match information
+ */
+export const recordSwipe = async (
+    swiperId: string,
+    swipedId: string,
+    direction: 'like' | 'dislike' | 'superlike'
+): Promise<SwipeResult> => {
+    try {
+        // First, insert the swipe
+        const { data: swipeData, error: swipeError } = await supabase
+            .from('swipes')
+            .upsert({
+                swiper_id: swiperId,
+                swiped_id: swipedId,
+                direction: direction,
+            }, {
+                onConflict: 'swiper_id,swiped_id'
+            })
+            .select()
+            .single();
+
+        if (swipeError) {
+            console.error('Error recording swipe:', swipeError);
+            return { success: false, matched: false, error: swipeError.message };
+        }
+
+        // Only check for match on like/superlike
+        if (direction === 'dislike') {
+            return { success: true, matched: false };
+        }
+
+        // Check if the other user has already liked us (mutual like)
+        const { data: mutualLike, error: mutualError } = await supabase
+            .from('swipes')
+            .select('*')
+            .eq('swiper_id', swipedId)
+            .eq('swiped_id', swiperId)
+            .in('direction', ['like', 'superlike'])
+            .single();
+
+        if (mutualError && mutualError.code !== 'PGRST116') {
+            console.error('Error checking mutual like:', mutualError);
+            return { success: true, matched: false };
+        }
+
+        // If mutual like exists, check if match already exists
+        if (mutualLike) {
+            const { data: existingMatch, error: matchError } = await supabase
+                .from('matches')
+                .select('id')
+                .or(`and(user1_id.eq.${swiperId},user2_id.eq.${swipedId}),and(user1_id.eq.${swipedId},user2_id.eq.${swiperId})`)
+                .single();
+
+            if (matchError && matchError.code !== 'PGRST116') {
+                console.error('Error checking existing match:', matchError);
+            }
+
+            // If no existing match, create one
+            if (!existingMatch) {
+                const { data: newMatch, error: createMatchError } = await supabase
+                    .from('matches')
+                    .insert({
+                        user1_id: swiperId,
+                        user2_id: swipedId,
+                        is_active: true,
+                    })
+                    .select()
+                    .single();
+
+                if (createMatchError) {
+                    console.error('Error creating match:', createMatchError);
+                    return { success: true, matched: false, error: createMatchError.message };
+                }
+
+                console.log('Match created:', newMatch?.id);
+                return { success: true, matched: true, matchId: newMatch?.id };
+            }
+
+            return { success: true, matched: true, matchId: existingMatch?.id };
+        }
+
+        return { success: true, matched: false };
+    } catch (error: any) {
+        console.error('Error in recordSwipe:', error);
+        return { success: false, matched: false, error: error.message };
+    }
+};
+
+/**
+ * Fetches all matches for a user with their profile data
+ * @param userId - Current user's ID
+ * @returns Array of matches with other user profiles
+ */
+export const fetchMatches = async (userId: string) => {
+    try {
+        const { data: matches, error } = await supabase
+            .from('matches')
+            .select('*')
+            .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching matches:', error);
+            throw error;
+        }
+
+        if (!matches || matches.length === 0) {
+            return [];
+        }
+
+        // Fetch other user profiles for each match
+        const matchesWithProfiles = await Promise.all(
+            matches.map(async (match) => {
+                const otherUserId = match.user1_id === userId ? match.user2_id : match.user1_id;
+
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', otherUserId)
+                    .single();
+
+                return {
+                    ...match,
+                    other_user: profile,
+                };
+            })
+        );
+
+        return matchesWithProfiles;
+    } catch (error) {
+        console.error('Error in fetchMatches:', error);
+        throw error;
+    }
+};
+
+/**
+ * Subscribes to new matches in real-time
+ * @param userId - Current user's ID
+ * @param onNewMatch - Callback when a new match is created
+ * @returns Unsubscribe function
+ */
+export const subscribeToNewMatches = (
+    userId: string,
+    onNewMatch: (match: any) => void
+) => {
+    const channel = supabase
+        .channel('new-matches')
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'matches',
+                filter: `user1_id=eq.${userId}`,
+            },
+            (payload) => {
+                onNewMatch(payload.new);
+            }
+        )
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'matches',
+                filter: `user2_id=eq.${userId}`,
+            },
+            (payload) => {
+                onNewMatch(payload.new);
+            }
+        )
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+};
+
 export default supabase;
