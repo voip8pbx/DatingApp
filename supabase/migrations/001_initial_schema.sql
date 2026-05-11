@@ -5,6 +5,70 @@
 -- =============================================================================
 
 -- =============================================================================
+-- CORE TABLES & COLUMNS
+-- =============================================================================
+
+-- Ensure profiles has required location columns
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='location_sharing_enabled') THEN
+        ALTER TABLE profiles ADD COLUMN location_sharing_enabled boolean DEFAULT true;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='ghost_mode_enabled') THEN
+        ALTER TABLE profiles ADD COLUMN ghost_mode_enabled boolean DEFAULT false;
+    END IF;
+END $$;
+
+-- User locations for real-time map tracking
+CREATE TABLE IF NOT EXISTS user_locations (
+    user_id uuid PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+    latitude double precision NOT NULL,
+    longitude double precision NOT NULL,
+    heading double precision,
+    updated_at timestamptz DEFAULT now()
+);
+
+-- Enable RLS on user_locations
+ALTER TABLE user_locations ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for user_locations
+DROP POLICY IF EXISTS "Users can view others locations" ON user_locations;
+CREATE POLICY "Users can view others locations" ON user_locations 
+    FOR SELECT 
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE profiles.id = user_locations.user_id 
+            AND profiles.location_sharing_enabled = true
+        )
+    );
+
+DROP POLICY IF EXISTS "Users can manage own location" ON user_locations;
+CREATE POLICY "Users can manage own location" ON user_locations 
+    FOR ALL 
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+-- Enable Real-time for user_locations
+-- Note: You might need to run this manually if the publication already exists
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND tablename = 'user_locations'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE user_locations;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Could not add user_locations to publication';
+END $$;
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_user_locations_updated_at ON user_locations(updated_at DESC);
+
+-- =============================================================================
 -- PHOTO HISTORY TABLE (for tracking photo changes and cleanup)
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS photo_history (
