@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { Profile, SwipeState, FilterPreferences, SwipeDirection, Match } from '../types';
-import { Config } from '../constants/Config';
 import { supabase } from '../supabase';
 
 interface SwipeStore extends SwipeState {
@@ -42,26 +41,61 @@ export const useSwipeStore = create<SwipeStore>((set, get) => ({
     setLoading: (isLoading) => set({ isLoading }),
 
     loadMoreProfiles: async () => {
-        const { profiles, isLoading, hasMore } = get();
+        const { profiles, isLoading, hasMore, filters, swipedProfiles } = get();
         if (isLoading || !hasMore) return;
 
         set({ isLoading: true });
 
         try {
-            const page = Math.floor(profiles.length / 10) + 1;
-            const response = await fetch(`${Config.API_URL}/api/profiles/discover?page=${page}&limit=10`, {
-                headers: {
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-                }
-            });
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) {
+                set({ isLoading: false, hasMore: false });
+                return;
+            }
 
-            const data = await response.json();
+            const currentUserId = session.user.id;
+            const PAGE_SIZE = 10;
+            const offset = profiles.length;
 
-            if (data.profiles && data.profiles.length > 0) {
+            // Fetch already-swiped profile IDs from DB to exclude them
+            const { data: swipedData } = await supabase
+                .from('swipes')
+                .select('swiped_id')
+                .eq('swiper_id', currentUserId);
+
+            const swipedIds = [
+                currentUserId,
+                ...swipedProfiles,
+                ...(swipedData?.map((s: any) => s.swiped_id) ?? []),
+            ];
+
+            // Build query
+            let query = supabase
+                .from('profiles')
+                .select('*')
+                .not('id', 'in', `(${swipedIds.join(',')})`)
+                .gte('age', filters.age_min)
+                .lte('age', filters.age_max)
+                .range(offset, offset + PAGE_SIZE - 1);
+
+            // Gender filter
+            if (filters.genders && filters.genders.length > 0) {
+                query = query.in('gender', filters.genders);
+            }
+
+            const { data: newProfiles, error } = await query;
+
+            if (error) {
+                console.error('Error loading profiles from Supabase:', error);
+                set({ isLoading: false, hasMore: false });
+                return;
+            }
+
+            if (newProfiles && newProfiles.length > 0) {
                 set((state) => ({
-                    profiles: [...state.profiles, ...data.profiles],
+                    profiles: [...state.profiles, ...(newProfiles as Profile[])],
                     isLoading: false,
-                    hasMore: data.profiles.length === 10,
+                    hasMore: newProfiles.length === PAGE_SIZE,
                 }));
             } else {
                 set({ isLoading: false, hasMore: false });

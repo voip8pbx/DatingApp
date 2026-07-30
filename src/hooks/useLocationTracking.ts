@@ -98,22 +98,40 @@ export const useLocationTracking = () => {
 
             console.log(`[LocationSync] Publishing: ${finalLat.toFixed(6)}, ${finalLng.toFixed(6)} (Heading: ${heading || 'N/A'})`);
 
-            const { error: upsertError } = await supabase
-                .from('user_locations')
-                .upsert(
-                    {
-                        user_id: currentUserProfile.id,
-                        latitude: finalLat,
-                        longitude: finalLng,
-                        heading: heading || null,
-                        updated_at: new Date().toISOString(),
-                    },
-                    { onConflict: 'user_id' }
-                );
+            const locationPayload = {
+                user_id: currentUserProfile.id,
+                latitude: finalLat,
+                longitude: finalLng,
+                heading: heading || null,
+                updated_at: new Date().toISOString(),
+            };
 
-            if (upsertError) {
-                console.error('[LocationSync] Supabase Upsert Error:', upsertError.message, upsertError.details);
-                return;
+            // Try insert first; if the row exists, fall back to update
+            const { error: insertError } = await supabase
+                .from('user_locations')
+                .insert(locationPayload);
+
+            if (insertError) {
+                if (insertError.code === '23505') {
+                    // Row already exists — update it
+                    const { error: updateError } = await supabase
+                        .from('user_locations')
+                        .update({
+                            latitude: finalLat,
+                            longitude: finalLng,
+                            heading: heading || null,
+                            updated_at: new Date().toISOString(),
+                        })
+                        .eq('user_id', currentUserProfile.id);
+
+                    if (updateError) {
+                        console.error('[LocationSync] Supabase Update Error:', updateError.message);
+                        return;
+                    }
+                } else {
+                    console.error('[LocationSync] Supabase Insert Error:', insertError.message);
+                    return;
+                }
             }
 
             console.log('[LocationSync] Successfully published location to Supabase');
